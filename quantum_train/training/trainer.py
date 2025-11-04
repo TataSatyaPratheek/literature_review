@@ -47,6 +47,12 @@ class QuantumTrainTrainer:
             output = self.model(data)
             loss = self.criterion(output, target)
             
+            # Statistics - LOG LOSS HERE, BEFORE ANY GRADIENT OPS!
+            running_loss += loss.item()
+            _, predicted = output.max(1)
+            total += target.size(0)
+            correct += predicted.eq(target).sum().item()
+            
             # Check for numerical instability
             if torch.isnan(loss) or torch.isinf(loss):
                 print(f"WARNING: Loss is {loss.item()}, skipping batch")
@@ -59,56 +65,40 @@ class QuantumTrainTrainer:
                 
                 # Use autograd.grad to inspect WITHOUT consuming the graph
                 qnn_grad = torch.autograd.grad(
-                    loss, 
-                    self.model.quantum_circuit.phi, 
-                    retain_graph=True,
-                    allow_unused=True
+                    loss, self.model.quantum_circuit.phi, 
+                    retain_graph=True, allow_unused=True
                 )[0]
                 
                 if qnn_grad is not None:
                     print(f"QNN grad norm: {qnn_grad.norm().item():.6f}")
-                else:
-                    print("WARNING: QNN gradients are None!")
                 
-                # Check mapping model gradients
                 for name, param in self.model.mapping_model.named_parameters():
                     grad = torch.autograd.grad(
-                        loss, 
-                        param, 
-                        retain_graph=True,
-                        allow_unused=True
+                        loss, param, retain_graph=True, allow_unused=True
                     )[0]
                     if grad is not None:
                         print(f"Mapping {name} grad norm: {grad.norm().item():.6f}")
-                    else:
-                        print(f"WARNING: Mapping {name} gradients are None!")
                 
                 print("=========================\n")
             
-                # Backward pass
-        loss.backward()
-        
-        # Use simple gradient clipping instead of scaling
-        torch.nn.utils.clip_grad_norm_(
-            list(self.model.quantum_circuit.parameters()) + 
-            list(self.model.mapping_model.parameters()),
-            max_norm=10.0
-        )
-        
-        self.optimizer.step()
-        
-        # Statistics
-        running_loss += loss.item()
-        _, predicted = output.max(1)
-        total += target.size(0)
-        correct += predicted.eq(target).sum().item()
-        
-        # Update progress bar
-        if batch_idx % self.config.log_interval == 0:
-            pbar.set_postfix({
-                'loss': running_loss / (batch_idx + 1),
-                'acc': 100. * correct / total
-            })
+            # Backward pass
+            loss.backward()
+            
+            # Use simple gradient clipping instead of scaling
+            torch.nn.utils.clip_grad_norm_(
+                list(self.model.quantum_circuit.parameters()) + 
+                list(self.model.mapping_model.parameters()),
+                max_norm=10.0
+            )
+            
+            self.optimizer.step()
+            
+            # Update progress bar
+            if batch_idx % self.config.log_interval == 0:
+                pbar.set_postfix({
+                    'loss': running_loss / (batch_idx + 1),
+                    'acc': 100. * correct / total
+                })
         
         epoch_loss = running_loss / len(self.train_loader)
         epoch_acc = 100. * correct / total
