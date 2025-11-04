@@ -41,54 +41,57 @@ class QuantumTrainTrainer:
         pbar = tqdm(self.train_loader, desc=f'Epoch {epoch+1}/{self.config.n_epochs}')
         for batch_idx, (data, target) in enumerate(pbar):
             data, target = data.to(self.device), target.to(self.device)
-            
-            # Forward pass
-            self.optimizer.zero_grad()
-            output = self.model(data)
-            loss = self.criterion(output, target)
-            
-            # Statistics - LOG LOSS HERE, BEFORE ANY GRADIENT OPS!
-            running_loss += loss.item()
-            _, predicted = output.max(1)
-            total += target.size(0)
-            correct += predicted.eq(target).sum().item()
-            
-            # Check for numerical instability
-            if torch.isnan(loss) or torch.isinf(loss):
-                print(f"WARNING: Loss is {loss.item()}, skipping batch")
-                continue
-            
-            # DEBUG: Check gradient flow on first batch WITHOUT calling backward()
+
+            with torch.autograd.set_detect_anomaly(True):
+                # Forward pass
+                self.optimizer.zero_grad()
+                output = self.model(data)
+                loss = self.criterion(output, target)
+                
+                # Statistics - LOG LOSS HERE, BEFORE ANY GRADIENT OPS!
+                running_loss += loss.item()
+                _, predicted = output.max(1)
+                total += target.size(0)
+                correct += predicted.eq(target).sum().item()
+                
+                # Check for numerical instability
+                if torch.isnan(loss) or torch.isinf(loss):
+                    print(f"WARNING: Loss is {loss.item()}, skipping batch")
+                    continue
+                
+                # Backward pass
+                loss.backward()
+
+            # DEBUG: Check gradient flow on first batch
             if batch_idx == 0 and epoch == 0:
-                print("\n=== Gradient Flow Check ===")
+                print("\n=== Gradient Flow Check (after backward) ===")
                 print(f"Loss: {loss.item():.4f}")
                 
-                # Use autograd.grad to inspect WITHOUT consuming the graph
-                qnn_grad = torch.autograd.grad(
-                    loss, self.model.quantum_circuit.phi, 
-                    retain_graph=True, allow_unused=True
-                )[0]
+                # Check QNN gradients
+                qnn_params = list(self.model.quantum_circuit.parameters())
+                if len(qnn_params) > 0:
+                    for i, param in enumerate(qnn_params):
+                        if param.grad is not None:
+                            print(f"QNN param {i} grad norm: {param.grad.norm().item():.6f}")
+                        else:
+                            print(f"QNN param {i} grad norm: None")
+                else:
+                    print("No QNN parameters found.")
                 
-                if qnn_grad is not None:
-                    print(f"QNN grad norm: {qnn_grad.norm().item():.6f}")
-                
+                # Check mapping model gradients
                 for name, param in self.model.mapping_model.named_parameters():
-                    grad = torch.autograd.grad(
-                        loss, param, retain_graph=True, allow_unused=True
-                    )[0]
-                    if grad is not None:
-                        print(f"Mapping {name} grad norm: {grad.norm().item():.6f}")
+                    if param.grad is not None:
+                        print(f"Mapping {name} grad norm: {param.grad.norm().item():.6f}")
+                    else:
+                        print(f"Mapping {name} grad norm: None")
                 
-                print("=========================\n")
-            
-            # Backward pass
-            loss.backward()
-            
-            # Use simple gradient clipping instead of scaling
+                print("==========================================\n")
+
+            # Adaptive gradient clipping - only clip if exploding (>1000)
             torch.nn.utils.clip_grad_norm_(
                 list(self.model.quantum_circuit.parameters()) + 
                 list(self.model.mapping_model.parameters()),
-                max_norm=10.0
+                max_norm=1000.0  # Only prevent extreme explosion
             )
             
             self.optimizer.step()

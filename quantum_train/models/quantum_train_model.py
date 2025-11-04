@@ -36,25 +36,20 @@ class QuantumTrainModel(nn.Module):
     def forward(self, x):
         """
         Complete forward pass with proper device handling.
-        QNN on CPU, mapping/classical on MPS.
+        QNN and mapping on same device - no transfer needed!
         """
-        # 1. Generate quantum measurement probabilities (on CPU)
-        probs = self.quantum_circuit()  # Returns tensor on CPU
+        # 1. Generate quantum measurement probabilities
+        # Now probs is ALREADY on correct device (mps or cpu)
+        probs = self.quantum_circuit()
         
-        # 2. Preserve gradient across device transfer
-        if self.device.type == 'mps':
-            # Create new tensor on MPS with same values but preserving grad
-            probs_mps = torch.empty_like(probs, device=self.device)
-            probs_mps.copy_(probs)
-            probs = probs_mps
-        
-        # 3. Map probabilities to classical parameters (on MPS)
+        # 2. Map probabilities to classical parameters
+        # No .to() needed - everything on same device!
         theta_full = self.mapping_model(self.basis_vectors, probs)
         
-        # 4. Trim to exact number of parameters needed
+        # 3. Trim to exact number of parameters needed
         theta = theta_full[:self.n_classical_params]
         
-        # 5. Split theta into layer parameters
+        # 4. Split theta into layer parameters
         offset = 0
         params = {}
         for name, shape in zip(self.layer_names, self.layer_shapes):
@@ -64,7 +59,7 @@ class QuantumTrainModel(nn.Module):
             params[name] = param
             offset += numel
         
-        # 6. Functional forward pass through CNN
+        # 5. Functional forward pass through CNN
         output = self._functional_cnn_forward(x, params)
         
         return output

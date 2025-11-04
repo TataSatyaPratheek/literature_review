@@ -10,6 +10,7 @@ from models.quantum_train_model import QuantumTrainModel
 from training.trainer import QuantumTrainTrainer
 from utils.visualization import plot_training_curves
 import argparse
+import torchquantum as tq
 
 def main():
     parser = argparse.ArgumentParser(description='Quantum-Train Experiments')
@@ -48,12 +49,13 @@ def main():
     # Keep quantum circuit on CPU (PennyLane compatibility)
     quantum_circuit = QuantumCircuit(
         n_qubits=config.n_qubits,
-        n_blocks=config.n_blocks
+        n_blocks=config.n_blocks,
+        device=config.device  # Can now be 'mps'!
     )  # No .to(config.device)
     
     # Verify quantum parameters are trainable
-    print(f"QNN parameters require grad: {quantum_circuit.phi.requires_grad}")
-    print(f"QNN parameters device: {quantum_circuit.phi.device}")
+    print(f"QNN parameters require grad: {next(quantum_circuit.parameters()).requires_grad}")
+    print(f"QNN parameters device: {next(quantum_circuit.parameters()).device}")
     
     # Mapping model on MPS
     mapping_model = MappingModel(
