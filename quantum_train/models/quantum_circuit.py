@@ -1,58 +1,72 @@
-"""Quantum circuit implementation using TorchQuantum - OPTIMIZED."""
+"""Quantum circuit - EXACT implementation from paper."""
 import torch
 import torch.nn as nn
 import torchquantum as tq
-import torchquantum.functional as tqf
 
 class QuantumCircuit(nn.Module):
-    """Parameterized quantum circuit using TorchQuantum - single parameter tensor."""
+    """Quantum circuit using U3+CU3 gates (paper's actual implementation)."""
     
-    def __init__(self, n_qubits, n_blocks, device='cpu'):
+    def __init__(self, n_qubits, n_blocks, n_classical_params, device='cpu'):
         super().__init__()
         self.n_qubits = n_qubits
         self.n_blocks = n_blocks
-        self.n_params = n_qubits * n_blocks
+        self.n_classical_params = n_classical_params
         self.device_name = device
         
-        # Quantum device
-        self.q_device = tq.QuantumDevice(
-            n_wires=n_qubits, 
-            bsz=1,
-            device=device
-        )
+        # TorchQuantum layers
+        self.u3_layers = tq.QuantumModuleList()
+        self.cu3_layers = tq.QuantumModuleList()
         
-        # SINGLE trainable parameter tensor (NOT 208 separate gates!)
-        # Shape: (n_blocks, n_qubits)
-        self.phi = nn.Parameter(
-            torch.randn(n_blocks, n_qubits, device=device) * 0.5
-        )
-        
-    def forward(self):
-        """Forward pass: generate measurement probabilities."""
-        # Reset quantum device
-        self.q_device.reset_states(bsz=1)
-        
-        # Apply circuit: RY rotations + CNOT entanglement
-        for block_idx in range(self.n_blocks):
-            # Apply RY rotations using functional interface
-            for qubit in range(self.n_qubits):
-                # Use functional RY gate with explicit parameter
-                tqf.ry(
-                    self.q_device,
-                    wires=qubit,
-                    params=self.phi[block_idx, qubit]
+        for _ in range(n_blocks):
+            self.u3_layers.append(
+                tq.Op1QAllLayer(
+                    op=tq.U3,
+                    n_wires=n_qubits,
+                    has_params=True,
+                    trainable=True
                 )
-            
-            # Apply CNOT entanglement
-            for qubit in range(self.n_qubits - 1):
-                tqf.cnot(self.q_device, wires=[qubit, qubit + 1])
+            )
+            self.cu3_layers.append(
+                tq.Op2QAllLayer(
+                    op=tq.CU3,
+                    n_wires=n_qubits,
+                    has_params=True,
+                    trainable=True,
+                    circular=True
+                )
+            )
+    
+    def forward(self):
+        """Forward pass - generates scaled probabilities."""
+        # Create quantum device
+        qdev = tq.QuantumDevice(
+            n_wires=self.n_qubits,
+            bsz=1,
+            device=next(self.parameters()).device
+        )
+        
+        # Apply U3 and CU3 layers
+        for k in range(self.n_blocks):
+            self.u3_layers[k](qdev)
+            self.cu3_layers[k](qdev)
         
         # Get state and compute probabilities
-        state = self.q_device.get_states_1d()
-        probs = torch.abs(state) ** 2
-        probs = probs.squeeze(0)
+        state_mag = qdev.get_states_1d().abs()[0]
+        x = torch.abs(state_mag) ** 2
+        x = x.reshape(2**self.n_qubits, 1)
         
-        return probs
+        # CRITICAL: Apply scaling transformation from paper
+        easy_scale_coeff = 2 ** (self.n_qubits - 1)
+        gamma = 0.1
+        beta = 0.8
+        alpha = 0.3
+        x = (beta * torch.tanh(gamma * easy_scale_coeff * x)) ** alpha
+        
+        # CRITICAL: Mean centering
+        x = x - torch.mean(x)
+        
+        return x
     
     def get_n_quantum_params(self):
-        return self.n_params
+        """Count trainable parameters."""
+        return sum(p.numel() for p in self.parameters())

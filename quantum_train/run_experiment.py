@@ -50,17 +50,17 @@ def main():
     quantum_circuit = QuantumCircuit(
         n_qubits=config.n_qubits,
         n_blocks=config.n_blocks,
-        device=config.device  # Can now be 'mps'!
-    )  # No .to(config.device)
+        n_classical_params=config.classical_params,
+        device=str(config.device)
+    ).to(config.device)
     
     # Verify quantum parameters are trainable
     print(f"QNN parameters require grad: {next(quantum_circuit.parameters()).requires_grad}")
     print(f"QNN parameters device: {next(quantum_circuit.parameters()).device}")
     
-    # Mapping model on MPS
+    # Mapping model
     mapping_model = MappingModel(
-        n_qubits=config.n_qubits,
-        layer_sizes=config.mapping_layers[1:]  # Exclude input size
+        n_qubits=config.n_qubits
     ).to(config.device)
     
     classical_nn = ClassicalTargetCNN(config).to(config.device)

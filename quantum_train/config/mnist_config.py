@@ -15,15 +15,14 @@ class MNISTConfig(BaseConfig):
     n_qubits = int(np.ceil(np.log2(classical_params)))  # 13 qubits
     
     # Quantum circuit
-    n_blocks = 16  # Can vary: 16-121 tested in paper
+    n_blocks = 16  # Paper uses 16 for MNIST
     
-    # Mapping model [n_qubits+1, hidden, hidden, hidden, 1]
-    mapping_layers = [14, 4, 20, 4, 1]
+    mapping_layers = [4, 20, 4]  # Paper's exact architecture
     
-    # Training - ADJUSTED
+    # Training
     batch_size = 128
     n_epochs = 50
-    learning_rate = 5e-3  # Changed from 1e-3 to 5e-3
+    learning_rate = 1e-4  # Paper uses 1e-4
     
     # Classical target NN architecture (smaller, matching ~6690 params)
     # Conv1: 1->4 channels, 3x3 kernel (28->26->13 after pool)
