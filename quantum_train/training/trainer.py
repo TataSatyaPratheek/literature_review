@@ -62,12 +62,19 @@ class QuantumTrainTrainer:
                 # Backward pass
                 loss.backward()
 
-            # Adaptive gradient clipping - only clip if exploding (>1000)
-            torch.nn.utils.clip_grad_norm_(
-                list(self.model.quantum_circuit.parameters()) + 
-                list(self.model.mapping_model.parameters()),
-                max_norm=1000.0  # Only prevent extreme explosion
-            )
+                # Monitor gradient health (optional - comment out after debugging)
+                if batch_idx % 100 == 0:
+                    qnn_grad_norm = sum(p.grad.norm().item() for p in self.model.quantum_circuit.parameters() if p.grad is not None)
+                    map_grad_norm = sum(p.grad.norm().item() for p in self.model.mapping_model.parameters() if p.grad is not None)
+                    if qnn_grad_norm + map_grad_norm > 100:
+                        print(f"  Warning: Large gradients detected (QNN: {qnn_grad_norm:.2f}, Map: {map_grad_norm:.2f})")
+
+                # Gradient clipping
+                torch.nn.utils.clip_grad_norm_(
+                    list(self.model.quantum_circuit.parameters()) + 
+                    list(self.model.mapping_model.parameters()),
+                    max_norm=10.0  # Moderate clipping
+                )
             
             self.optimizer.step()
             

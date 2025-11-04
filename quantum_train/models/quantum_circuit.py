@@ -15,8 +15,8 @@ class QuantumCircuit(nn.Module):
         # Quantum device
         self.dev = qml.device(device, wires=n_qubits)
         
-        # Simple initialization
-        self.phi = nn.Parameter(torch.randn(n_blocks, n_qubits) * 0.01)
+        # Simple initialization - LARGER values
+        self.phi = nn.Parameter(torch.randn(n_blocks, n_qubits) * 0.1)  # Changed from 0.01 to 2.0
         
         # QNode
         self.qnode = qml.QNode(self._circuit, self.dev, interface='torch')

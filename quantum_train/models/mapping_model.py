@@ -1,4 +1,4 @@
-"""Mapping model - MINIMAL VERSION."""
+"""Mapping model - IMPROVED VERSION."""
 import torch
 import torch.nn as nn
 
@@ -7,15 +7,20 @@ class MappingModel(nn.Module):
         super().__init__()
         self.n_qubits = n_qubits
         
-        # SIMPLEST possible mapping: just one linear layer
-        self.linear = nn.Linear(n_qubits + 1, 1, bias=False)
+        # Simple 2-layer MLP: (14 -> 20 -> 1)
+        self.fc1 = nn.Linear(n_qubits + 1, 20)
+        self.fc2 = nn.Linear(20, 1)
         
-        # Small initialization
-        nn.init.uniform_(self.linear.weight, -0.01, 0.01)
+        # Proper initialization
+        nn.init.xavier_uniform_(self.fc1.weight, gain=0.5)
+        nn.init.zeros_(self.fc1.bias)
+        nn.init.xavier_uniform_(self.fc2.weight, gain=0.5)
+        nn.init.zeros_(self.fc2.bias)
     
     def forward(self, basis_vectors, probabilities):
         x = torch.cat([basis_vectors, probabilities], dim=-1)
-        theta = self.linear(x).squeeze(-1)
+        x = torch.relu(self.fc1(x))
+        theta = self.fc2(x).squeeze(-1)
         return theta
     
     def create_basis_vectors(self, device):

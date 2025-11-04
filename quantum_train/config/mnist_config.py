@@ -8,13 +8,13 @@ class MNISTConfig(BaseConfig):
     
     classical_params = 6676
     n_qubits = 13
-    n_blocks = 2  # START SMALL!
+    n_blocks = 8  # REDUCED from 16 to 8 for speed
     
     mapping_layers = []  # Not used with minimal mapping
     
-    batch_size = 32  # SMALLER batch
+    batch_size = 64  # INCREASED from 32 to 64 for speed
     n_epochs = 50
-    learning_rate = 1e-5  # VERY SMALL LR
+    learning_rate = 5e-4  # MODERATE: between 1e-5 and 1e-3
     
     classical_architecture = {
         'conv1': {'in_channels': 1, 'out_channels': 4, 'kernel_size': 3},
