@@ -23,7 +23,7 @@ class MNISTConfig(BaseConfig):
     # Training - ADJUSTED
     batch_size = 128
     n_epochs = 50
-    learning_rate = 1e-4  # Back to 1e-4 after fixing loss logging bug
+    learning_rate = 5e-3  # Changed from 1e-3 to 5e-3
     
     # Classical target NN architecture (smaller, matching ~6690 params)
     # Conv1: 1->4 channels, 3x3 kernel (28->26->13 after pool)
