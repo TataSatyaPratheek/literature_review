@@ -62,31 +62,6 @@ class QuantumTrainTrainer:
                 # Backward pass
                 loss.backward()
 
-            # DEBUG: Check gradient flow on first batch
-            if batch_idx == 0 and epoch == 0:
-                print("\n=== Gradient Flow Check (after backward) ===")
-                print(f"Loss: {loss.item():.4f}")
-                
-                # Check QNN gradients
-                qnn_params = list(self.model.quantum_circuit.parameters())
-                if len(qnn_params) > 0:
-                    for i, param in enumerate(qnn_params):
-                        if param.grad is not None:
-                            print(f"QNN param {i} grad norm: {param.grad.norm().item():.6f}")
-                        else:
-                            print(f"QNN param {i} grad norm: None")
-                else:
-                    print("No QNN parameters found.")
-                
-                # Check mapping model gradients
-                for name, param in self.model.mapping_model.named_parameters():
-                    if param.grad is not None:
-                        print(f"Mapping {name} grad norm: {param.grad.norm().item():.6f}")
-                    else:
-                        print(f"Mapping {name} grad norm: None")
-                
-                print("==========================================\n")
-
             # Adaptive gradient clipping - only clip if exploding (>1000)
             torch.nn.utils.clip_grad_norm_(
                 list(self.model.quantum_circuit.parameters()) + 

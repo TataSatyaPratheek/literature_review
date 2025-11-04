@@ -1,72 +1,40 @@
-"""Quantum circuit - EXACT implementation from paper."""
+"""Quantum circuit - SIMPLIFIED VERSION."""
+import pennylane as qml
 import torch
 import torch.nn as nn
-import torchquantum as tq
 
 class QuantumCircuit(nn.Module):
-    """Quantum circuit using U3+CU3 gates (paper's actual implementation)."""
+    """Simple quantum circuit with PennyLane."""
     
-    def __init__(self, n_qubits, n_blocks, n_classical_params, device='cpu'):
+    def __init__(self, n_qubits, n_blocks, device='default.qubit'):
         super().__init__()
         self.n_qubits = n_qubits
         self.n_blocks = n_blocks
-        self.n_classical_params = n_classical_params
-        self.device_name = device
+        self.n_params = n_qubits * n_blocks
         
-        # TorchQuantum layers
-        self.u3_layers = tq.QuantumModuleList()
-        self.cu3_layers = tq.QuantumModuleList()
+        # Quantum device
+        self.dev = qml.device(device, wires=n_qubits)
         
-        for _ in range(n_blocks):
-            self.u3_layers.append(
-                tq.Op1QAllLayer(
-                    op=tq.U3,
-                    n_wires=n_qubits,
-                    has_params=True,
-                    trainable=True
-                )
-            )
-            self.cu3_layers.append(
-                tq.Op2QAllLayer(
-                    op=tq.CU3,
-                    n_wires=n_qubits,
-                    has_params=True,
-                    trainable=True,
-                    circular=True
-                )
-            )
+        # Simple initialization
+        self.phi = nn.Parameter(torch.randn(n_blocks, n_qubits) * 0.01)
+        
+        # QNode
+        self.qnode = qml.QNode(self._circuit, self.dev, interface='torch')
+        
+    def _circuit(self, phi):
+        for block in range(self.n_blocks):
+            for qubit in range(self.n_qubits):
+                qml.RY(phi[block, qubit], wires=qubit)
+            for qubit in range(self.n_qubits - 1):
+                qml.CNOT(wires=[qubit, qubit + 1])
+        
+        return qml.probs(wires=range(self.n_qubits))
     
     def forward(self):
-        """Forward pass - generates scaled probabilities."""
-        # Create quantum device
-        qdev = tq.QuantumDevice(
-            n_wires=self.n_qubits,
-            bsz=1,
-            device=next(self.parameters()).device
-        )
-        
-        # Apply U3 and CU3 layers
-        for k in range(self.n_blocks):
-            self.u3_layers[k](qdev)
-            self.cu3_layers[k](qdev)
-        
-        # Get state and compute probabilities
-        state_mag = qdev.get_states_1d().abs()[0]
-        x = torch.abs(state_mag) ** 2
-        x = x.reshape(2**self.n_qubits, 1)
-        
-        # CRITICAL: Apply scaling transformation from paper
-        easy_scale_coeff = 2 ** (self.n_qubits - 1)
-        gamma = 0.1
-        beta = 0.8
-        alpha = 0.3
-        x = (beta * torch.tanh(gamma * easy_scale_coeff * x)) ** alpha
-        
-        # CRITICAL: Mean centering
-        x = x - torch.mean(x)
-        
-        return x
+        probs = self.qnode(self.phi)
+        if probs.dtype == torch.float64:
+            probs = probs.float()
+        return probs.unsqueeze(1)  # Shape: (2^n, 1)
     
     def get_n_quantum_params(self):
-        """Count trainable parameters."""
-        return sum(p.numel() for p in self.parameters())
+        return self.n_params

@@ -47,12 +47,12 @@ def main():
     
         # Build models
     # Keep quantum circuit on CPU (PennyLane compatibility)
+    pennylane_device = 'default.qubit' if str(config.device) == 'cpu' else str(config.device)
     quantum_circuit = QuantumCircuit(
         n_qubits=config.n_qubits,
         n_blocks=config.n_blocks,
-        n_classical_params=config.classical_params,
-        device=str(config.device)
-    ).to(config.device)
+        device=pennylane_device
+    )
     
     # Verify quantum parameters are trainable
     print(f"QNN parameters require grad: {next(quantum_circuit.parameters()).requires_grad}")
