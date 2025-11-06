@@ -17,7 +17,7 @@ impossible.
    The QTRL framework is theoretically ideal for your task because it
    uses a quantum processor *only* during training, producing a 100%
    classical model that can run the low-latency MCTS inference required
-   for Go.[1, 2]
+   for Go.
    - **The Catch:** This model-compression advantage (a "polylogarithmic"
      reduction in parameters) is *only* useful for SOTA-scale models
      (e.g., 10B+ parameters).
